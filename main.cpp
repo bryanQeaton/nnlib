@@ -1,12 +1,7 @@
-#include <chrono>
-#include <iostream>
 #include <vector>
 #include "nnlib.h"
-/*
-Design paradigm:
-1. the user ONLY ever passes single datapoints to the model, datasets are handled ENTIRELY by the user
-2. external to the model, an explicit training function can be made which takes datasets, but that is seperate to the Model class.
 
+/*
 todo:
 save/load model
 early stopping with patience
@@ -44,7 +39,8 @@ int main() {
         0.001f,
         true
         );
-        nn::train(model,rnd_data_x,rnd_data_y,1024*dataset_scale,.1f,
+        nn::train(
+            model,rnd_data_x,rnd_data_y,1024*dataset_scale,.1f,
             250,32, 2,true,
             .001,.0001,.6,.6
             );
