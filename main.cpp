@@ -3,11 +3,13 @@
 
 /*
 todo:
-save/load model
 early stopping with patience
+ensure nesterov momentum is applied to bias and gamma
+l1 and l2 regression should be a training parameter not a model parameter
 */
 
 int main() {
+    const std::string filename="C:/Users/bryan/CLionProjects/nnlib/model.params";
     // random dataset
     constexpr int dataset_scale=5;
     std::vector<float> rnd_data_x[1024*dataset_scale]={};
@@ -27,24 +29,26 @@ int main() {
         f%=7;
         rnd_data_y[i].emplace_back(f);
     }
+
+    //initialize model===================
     auto model=nn::Model(
         32,
         {
-            {256,nn::Relu,false},
+            {64,nn::Relu,false},
             {64,nn::Relu,false},
             {1,nn::Linear,true}
         },
         nn::MSE,
-        0.0001f,
-        0.001f,
         true
         );
-        nn::train(
-            model,rnd_data_x,rnd_data_y,1024*dataset_scale,.1f,
-            250,32, 2,true,
-            .001,.0001,.6,.6
-            );
-
+    //auto model=nn::Model(filename);
+    //train model========================
+    nn::train(
+        model,filename,rnd_data_x,rnd_data_y,1024*dataset_scale,.1f,
+        250,32, 10,true,
+        .01,.001,.95,.8,
+        1.0,0.0001,0.001
+        );
 
 
     return 0;

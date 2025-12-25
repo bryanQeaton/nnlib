@@ -307,23 +307,17 @@ namespace nn {
         int input_layer_size{};
         std::vector<Layer> layers{};
         Loss_function model_loss{};
-        float l1_term{};
-        float l2_term{};
         bool normalize{};
     public:
         Model(const int &input_size,
             const std::vector<Layer> &layer_stack,
             const Loss_function &loss_function,
-            const float &l1_regularization_term=0.f,
-            const float &l2_regularization_term=0.f,
             const bool &use_RMSnorm=true
             ) {
             //defining the model
             input_layer_size=input_size;
             layers=layer_stack;
             model_loss=loss_function;
-            l1_term=l1_regularization_term;
-            l2_term=l2_regularization_term;
             normalize=use_RMSnorm;
             for (int i=0;i<static_cast<int>(layers.size());i++) {//for each layer
                 int prev_layer_neuron_count=input_layer_size;
@@ -417,7 +411,7 @@ namespace nn {
                 }
             }
         }
-        void update_grads(const float &learning_rate,const float &momentum_decay=0.95f,const float clip_norm=1.0f) {
+        void update_grads(const float &learning_rate,const float &momentum_decay=0.95f,const float clip_norm=1.0f,const float &l1_term=.0001,const float &l2_term=.001) {
             //average gradients
             for (auto &layer:layers) {
                 for (auto &neuron:layer.neurons) {
@@ -488,28 +482,28 @@ namespace nn {
         void save(const std::string &filename) const {
             std::ofstream ofs(filename,std::ios::binary);
             cereal::BinaryOutputArchive archive(ofs);
-            archive(input_layer_size,layers,model_loss,l1_term,l2_term,normalize);
+            archive(input_layer_size,layers,model_loss,normalize);
         }
         explicit Model(const std::string &filename) { //construct a model with a saved file
             std::ifstream file(filename, std::ios::binary);
             cereal::BinaryInputArchive archive(file);
-            archive(input_layer_size,layers,model_loss,l1_term,l2_term,normalize);
+            archive(input_layer_size,layers,model_loss,normalize);
         }
         void load(const std::string &filename) { //load a model with a saved file
             std::ifstream file(filename, std::ios::binary);
             cereal::BinaryInputArchive archive(file);
-            archive(input_layer_size,layers,model_loss,l1_term,l2_term,normalize);
+            archive(input_layer_size,layers,model_loss,normalize);
         }
 
     };
-    inline void train(Model &model,
+    inline void train(Model &model, const std::string &filename,
                       std::vector<float> data_x[],std::vector<float> data_y[],
                       const int &dataset_size, const float &validation_split,
                       const int &epochs, const int &batch_size,
                       const int &plot_granularity=2, const bool &continuous_plot=true,
                       const float &learning_rate_init=.001f, const float &learning_rate_final=.0001f,
                       const float &momentum_decay_init=.95f, const float &momentum_decay_final=.8f,
-                      const float &clip_norm=1.0f
+                      const float &clip_norm=1.0f,const float &l1_regression_term=.0001,const float &l2_regression_term=.001
     ) {
         const int dataset_size_reg=static_cast<int>(static_cast<float>(dataset_size)*(1.f-validation_split));
         const int dataset_size_val=static_cast<int>(static_cast<float>(dataset_size)*(validation_split));
@@ -517,9 +511,9 @@ namespace nn {
         std::vector<float> plot_y;
         std::vector<float> plot_y_val;
         if (continuous_plot) {
-            matplot::plot(plot_x,plot_y,"-")->display_name("loss");
+            matplot::plot(plot_x,plot_y,"-")->line_width(2.5).display_name("loss");
             matplot::hold(matplot::on);
-            matplot::plot(plot_x,plot_y_val,"--")->display_name("val loss");
+            matplot::plot(plot_x,plot_y_val,"--")->line_width(2.5).display_name("val loss");
             matplot::hold(matplot::off);
             matplot::xlabel("Epochs");
             matplot::ylabel("Loss");
@@ -533,7 +527,7 @@ namespace nn {
                 if (i%batch_size==0||i==dataset_size_reg-1) {
                     const float &momentum_decay=momentum_decay_final+(momentum_decay_init-momentum_decay_final)*(1.f-(static_cast<float>(epoch)/static_cast<float>(epochs)));
                     const float &learning_rate=learning_rate_final+(learning_rate_init-learning_rate_final)*(1.f-(static_cast<float>(epoch)/static_cast<float>(epochs)));
-                    model.update_grads(learning_rate,momentum_decay,clip_norm);
+                    model.update_grads(learning_rate,momentum_decay,clip_norm,l1_regression_term,l2_regression_term);
                 }
             }
             float loss=0.f;
@@ -552,18 +546,18 @@ namespace nn {
             plot_y.emplace_back(loss);
             plot_y_val.emplace_back(loss_val);
             if (continuous_plot&&(epoch%plot_granularity==0||epoch==1||epoch==epochs)) {
-                matplot::plot(plot_x,plot_y,"-")->display_name("loss");
+                matplot::plot(plot_x,plot_y,"-")->line_width(2.5).display_name("loss");
                 matplot::hold(matplot::on);
-                matplot::plot(plot_x,plot_y_val,"--")->display_name("val loss");
+                matplot::plot(plot_x,plot_y_val,"--")->line_width(2.5).display_name("val loss");
                 matplot::hold(matplot::off);
                 matplot::legend();
 
             }
         }
         if (!continuous_plot) {
-            matplot::plot(plot_x,plot_y,"-")->display_name("loss");
+            matplot::plot(plot_x,plot_y,"-")->line_width(2.5).display_name("loss");
             matplot::hold(matplot::on);
-            matplot::plot(plot_x,plot_y_val,"--")->display_name("val loss");
+            matplot::plot(plot_x,plot_y_val,"--")->line_width(2.5).display_name("val loss");
             matplot::hold(matplot::off);
             matplot::xlabel("Epochs");
             matplot::ylabel("Loss");
@@ -571,6 +565,20 @@ namespace nn {
             matplot::legend();
         }
         matplot::show();
+        while (true) {
+            std::string ans;
+            std::cout<<"save model? y/n\n";
+            std::cin>>ans;
+            if (ans=="y"||ans=="Y") {
+                model.save(filename);
+                std::cout<<"model saved!\n";
+                break;
+            }
+            if (ans=="n"||ans=="N") {
+                std::cout<<"model not saved!\n";
+                break;
+            }
+        }
     }
 
 
