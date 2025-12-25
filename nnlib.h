@@ -3,6 +3,8 @@
 #include <vector>
 #include <random>
 #include <matplot/matplot.h>
+#include "third_party/cereal/archives/binary.hpp"
+#include "third_party/cereal/types/vector.hpp"
 
 inline float sgn(const float &x) {
     if (x>0){return 1.f;}
@@ -62,14 +64,14 @@ namespace nn {
         inline std::vector<float> mse(const std::vector<float> &pred,const std::vector<float> &real) {
             std::vector temp(pred.size(),0.f);
             for (int i=0;i<static_cast<int>(pred.size());i++) {
-                temp[i]+=std::pow(pred[i]-real[i],2);
+                temp[i]+=static_cast<float>(std::pow(pred[i]-real[i],2));
             }
             return temp;
         }
         inline float mse_reduced(const std::vector<float> &pred,const std::vector<float> &real) {
             float temp=0.f;
             for (int i=0;i<static_cast<int>(pred.size());i++) {
-                temp+=std::pow(pred[i]-real[i],2);
+                temp+=static_cast<float>(std::pow(pred[i]-real[i],2));
             }
             return temp;
         }
@@ -99,7 +101,7 @@ namespace nn {
             for (int i=0;i<static_cast<int>(pred.size());i++) {
                 temp+=real[i]*std::log(pred[i])+(1-real[i])*std::log(1-pred[i]);
             }
-            temp/=pred.size();
+            temp/=static_cast<float>(pred.size());
             return -temp;
         }
         inline float kl_divergence(const std::vector<float> &pred,const std::vector<float> &real) {
@@ -116,19 +118,19 @@ namespace nn {
     //  the softmax function must be applied over a layer
     //  therefore all activations must be applied at the layer level.
     struct Neuron {
-        Activation_function activation;
-        float bias;
-        float bias_grad;
-        float bias_momentum;
-        float gamma;
-        float gamma_grad;
-        float gamma_momentum;
-        std::vector<float> weights;
-        std::vector<float> weight_grads;
-        std::vector<float> weight_momentum;
-        float pre_activation_value;
-        float pre_gamma_value;
-        float activation_value;
+        Activation_function activation{};
+        float bias{};
+        float bias_grad{};
+        float bias_momentum{};
+        float gamma{};
+        float gamma_grad{};
+        float gamma_momentum{};
+        std::vector<float> weights{};
+        std::vector<float> weight_grads{};
+        std::vector<float> weight_momentum{};
+        float pre_activation_value{};
+        float pre_gamma_value{};
+        float activation_value{};
         //activation is seperate
         void compute(const std::vector<float> &input,const bool &use_bias) {
             float temp=0.f;
@@ -138,13 +140,44 @@ namespace nn {
             pre_activation_value=temp;
             if (use_bias){pre_activation_value+=bias;}
         }
+        Neuron(const Activation_function &a,
+            const float &b,const float &bg,const float &bm,
+            const float &g,const float &gg,const float &gm,
+            const std::vector<float> &w,const std::vector<float> &wg,const std::vector<float> &wm,
+            const float &pav,const float &pgv,const float &av) {
+            activation=a;
+            bias=b;
+            bias_grad=bg;
+            bias_momentum=bm;
+            gamma=g;
+            gamma_grad=gg;
+            gamma_momentum=gm;
+            weights=w;
+            weight_grads=wg;
+            weight_momentum=wm;
+            pre_activation_value=pav;
+            pre_gamma_value=pgv;
+            activation_value=av;
+        }
+
+        //serialization
+        Neuron()=default;
+        template<class Archive>
+        void serialize(Archive &archive) {
+            archive(activation,
+                bias,bias_grad,bias_momentum,
+                gamma,gamma_grad,gamma_momentum,
+                weights,weight_grads,weight_momentum,
+                pre_activation_value,pre_gamma_value,
+                activation_value);
+        }
     };
     struct Layer {
-        std::vector<Neuron> neurons;
-        int neuron_count;
-        float grad_updates;
-        Activation_function activ_func;
-        bool use_bias_term;
+        std::vector<Neuron> neurons{};
+        int neuron_count{};
+        float grad_updates{};
+        Activation_function activ_func{};
+        bool use_bias_term{};
         Layer(const int &neurons, const Activation_function &activation_function,const bool &use_bias) {
             neuron_count=neurons;
             activ_func=activation_function;
@@ -157,7 +190,7 @@ namespace nn {
             for (auto &n:neurons){
                 n.compute(prev_layer,use_bias_term);
                 if (normalize) {
-                    norm+=std::pow(n.pre_activation_value,2);
+                    norm+=static_cast<float>(std::pow(n.pre_activation_value,2));
                 }
             }
             if (normalize) {
@@ -229,7 +262,6 @@ namespace nn {
                     }
                     break;
                 case (Softmax):
-                    break;
                 case (Linear):
                     break;
                 case (SurrogateRelu):
@@ -256,14 +288,28 @@ namespace nn {
             }
             return prev_layer_error;
         }
+        Layer(const std::vector<Neuron> &n,const int &nc,const float &gu,const Activation_function &af,const bool &ubt) {
+            neurons=n;
+            neuron_count=nc;
+            grad_updates=gu;
+            activ_func=af;
+            use_bias_term=ubt;
+        }
+
+        //serialization
+        Layer()=default;
+        template<class Archive>
+        void serialize(Archive &archive) {
+            archive(neurons,neuron_count,grad_updates,activ_func,use_bias_term);
+        }
     };
     class Model {
-        int input_layer_size;
-        std::vector<Layer> layers;
-        Loss_function model_loss;
-        float l1_term;
-        float l2_term;
-        bool normalize;
+        int input_layer_size{};
+        std::vector<Layer> layers{};
+        Loss_function model_loss{};
+        float l1_term{};
+        float l2_term{};
+        bool normalize{};
     public:
         Model(const int &input_size,
             const std::vector<Layer> &layer_stack,
@@ -287,7 +333,7 @@ namespace nn {
                         std::vector<float> weights;
                         std::vector weight_grads(prev_layer_neuron_count,0.f);
                         for (int m=0;m<prev_layer_neuron_count;m++) {
-                            weights.emplace_back(random::he_init(prev_layer_neuron_count));
+                            weights.emplace_back(random::he_init(static_cast<float>(prev_layer_neuron_count)));
                         }
                         layers[i].neurons.emplace_back(
                             layers[i].activ_func,
@@ -300,6 +346,7 @@ namespace nn {
                             weights,
                             weight_grads,
                             weight_grads,
+                            0.f,
                             0.f,
                             0.f
                             );
@@ -308,7 +355,7 @@ namespace nn {
                         std::vector<float> weights;
                         std::vector weight_grads(prev_layer_neuron_count,0.f);
                         for (int m=0;m<prev_layer_neuron_count;m++) {
-                            weights.emplace_back(random::xavier_init(prev_layer_neuron_count,layers[i].neuron_count));
+                            weights.emplace_back(random::xavier_init(static_cast<float>(prev_layer_neuron_count),static_cast<float>(layers[i].neuron_count)));
                         }
                         layers[i].neurons.emplace_back(
                             layers[i].activ_func,
@@ -321,6 +368,7 @@ namespace nn {
                             weights,
                             weight_grads,
                             weight_grads,
+                            0.f,
                             0.f,
                             0.f
                             );
@@ -356,7 +404,7 @@ namespace nn {
                 }
             }
             //back
-            for (int i=layers.size()-1;i>=0;i--) {
+            for (int i=static_cast<int>(layers.size())-1;i>=0;i--) {
                 if (i!=0) { //if its not the first layer, compute both weight and input gradients
                     std::vector prev_layer_value(layers[i-1].neuron_count,0.f);
                     for (int n=0;n<layers[i-1].neuron_count;n++) {
@@ -369,7 +417,6 @@ namespace nn {
                 }
             }
         }
-
         void update_grads(const float &learning_rate,const float &momentum_decay=0.95f,const float clip_norm=1.0f) {
             //average gradients
             for (auto &layer:layers) {
@@ -384,10 +431,10 @@ namespace nn {
             float global_norm=0.f;
             for (const auto &layer:layers) {
                 for (const auto &neuron:layer.neurons) {
-                    global_norm+=std::pow(neuron.bias_grad,2);
-                    global_norm+=std::pow(neuron.gamma_grad,2);
+                    global_norm+=static_cast<float>(std::pow(neuron.bias_grad,2));
+                    global_norm+=static_cast<float>(std::pow(neuron.gamma_grad,2));
                     for (const auto &weight_grad:neuron.weight_grads) {
-                        global_norm+=std::pow(weight_grad,2);
+                        global_norm+=static_cast<float>(std::pow(weight_grad,2));
                     }
                 }
             }
@@ -437,11 +484,24 @@ namespace nn {
                 layer.grad_updates=0.f;
             }
         }
-        //save model function
-        //load model function as another way of initializing a model
+        //saving/loading
+        void save(const std::string &filename) const {
+            std::ofstream ofs(filename,std::ios::binary);
+            cereal::BinaryOutputArchive archive(ofs);
+            archive(input_layer_size,layers,model_loss,l1_term,l2_term,normalize);
+        }
+        explicit Model(const std::string &filename) { //construct a model with a saved file
+            std::ifstream file(filename, std::ios::binary);
+            cereal::BinaryInputArchive archive(file);
+            archive(input_layer_size,layers,model_loss,l1_term,l2_term,normalize);
+        }
+        void load(const std::string &filename) { //load a model with a saved file
+            std::ifstream file(filename, std::ios::binary);
+            cereal::BinaryInputArchive archive(file);
+            archive(input_layer_size,layers,model_loss,l1_term,l2_term,normalize);
+        }
 
     };
-    //add saving, patience and early stopping, user - based early stopping
     inline void train(Model &model,
                       std::vector<float> data_x[],std::vector<float> data_y[],
                       const int &dataset_size, const float &validation_split,
@@ -451,8 +511,8 @@ namespace nn {
                       const float &momentum_decay_init=.95f, const float &momentum_decay_final=.8f,
                       const float &clip_norm=1.0f
     ) {
-        const int dataset_size_reg=dataset_size*(1.f-validation_split);
-        const int dataset_size_val=dataset_size*(validation_split);
+        const int dataset_size_reg=static_cast<int>(static_cast<float>(dataset_size)*(1.f-validation_split));
+        const int dataset_size_val=static_cast<int>(static_cast<float>(dataset_size)*(validation_split));
         std::vector<float> plot_x;
         std::vector<float> plot_y;
         std::vector<float> plot_y_val;
@@ -471,8 +531,8 @@ namespace nn {
             for (int i=0;i<dataset_size_reg;i++) {
                 model.compute_grads(data_x[i],data_y[i]);
                 if (i%batch_size==0||i==dataset_size_reg-1) {
-                    const float &momentum_decay=momentum_decay_final+(momentum_decay_init-momentum_decay_final)*(1-(epoch/epochs));
-                    const float &learning_rate=learning_rate_final+(learning_rate_init-learning_rate_final)*(1-(epoch/epochs));
+                    const float &momentum_decay=momentum_decay_final+(momentum_decay_init-momentum_decay_final)*(1.f-(static_cast<float>(epoch)/static_cast<float>(epochs)));
+                    const float &learning_rate=learning_rate_final+(learning_rate_init-learning_rate_final)*(1.f-(static_cast<float>(epoch)/static_cast<float>(epochs)));
                     model.update_grads(learning_rate,momentum_decay,clip_norm);
                 }
             }
@@ -480,12 +540,12 @@ namespace nn {
             for (int i=0;i<dataset_size_reg;i++) {
                 loss+=losses::mse_reduced(model.predict(data_x[i]),data_y[i]);
             }
-            loss/=dataset_size_reg;
+            loss/=static_cast<float>(dataset_size_reg);
             float loss_val=0.f;
             for (int i=0;i<dataset_size_val;i++) {
                 loss_val+=losses::mse_reduced(model.predict(data_x[dataset_size_reg+i]),data_y[dataset_size_reg+i]);
             }
-            loss_val/=dataset_size_val;
+            loss_val/=static_cast<float>(dataset_size_val);
 
             std::cout<<"epoch:"<<epoch<<" loss:"<<loss<<" val loss:"<<loss_val<<"\n=========================================\n";
             plot_x.emplace_back(epoch);
@@ -512,6 +572,8 @@ namespace nn {
         }
         matplot::show();
     }
+
+
 
 
 }
