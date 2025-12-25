@@ -2,7 +2,6 @@
 
 ### Todo:
 - Implement early-stopping with patience
-- Saving/Loading models
 - Graph based model initialization for multi-input/multi-output models
 - More activation functions
 - Choice of SGD, RMSprop, or ADAM optimizers
@@ -10,7 +9,7 @@
 - Custom Activations (?)
 
 ### Features:
-
+- Saving/Loading models via Cereal-1.3.6
 - Sequential model initialization
 - Nesterov Momentum + SGD
 - Lasso and Ridge regression
