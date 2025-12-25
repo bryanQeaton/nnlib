@@ -3,7 +3,6 @@
 
 /*
 todo:
-save/load model
 early stopping with patience
 */
 
