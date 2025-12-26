@@ -463,16 +463,20 @@ namespace nn {
                         layer.neurons[n].weight_grads[m]=0.f; //zero grads
                     }
                     if (layer.use_bias_term) {
-                        const float bias_update=layer.neurons[n].bias_grad;
-                        layer.neurons[n].bias-=(bias_update+momentum_decay*layer.neurons[n].bias_momentum)*learning_rate; //normalize and apply learning rate
-                        layer.neurons[n].bias_momentum=bias_update;
+                        const float b_grad=layer.neurons[n].bias_grad;
+                        layer.neurons[n].bias_momentum=(momentum_decay*layer.neurons[n].bias_momentum)+b_grad;
+                        const float nesterov_momentum=(layer.neurons[n].bias_momentum*momentum_decay)+b_grad;
+                        layer.neurons[n].bias-=nesterov_momentum*learning_rate; //normalize and apply learning rate
                         layer.neurons[n].bias_grad=0.f; //zero grads
                     }
+                    if (normalize) {
+                        const float g_grad=layer.neurons[n].gamma_grad;
+                        layer.neurons[n].gamma_momentum=(momentum_decay*layer.neurons[n].gamma_momentum)+g_grad;
+                        const float nesterov_momentum=(layer.neurons[n].gamma_momentum*momentum_decay)+g_grad;
+                        layer.neurons[n].gamma-=nesterov_momentum*learning_rate;
+                        layer.neurons[n].gamma_grad=0.f;
+                    }
 
-                    const float gamma_update=layer.neurons[n].gamma_grad;
-                    layer.neurons[n].gamma-=(gamma_update+momentum_decay*layer.neurons[n].gamma_momentum)*learning_rate;
-                    layer.neurons[n].gamma_momentum=gamma_update;
-                    layer.neurons[n].gamma_grad=0.f;
 
                 }
                 layer.grad_updates=0.f;
